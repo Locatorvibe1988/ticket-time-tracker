@@ -1,0 +1,14 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <Authors>Matthew Massena Jr.</Authors>
+    <Company>Matthew Massena Jr.</Company>
+    <Copyright>Copyright © 2026 Matthew Massena Jr.</Copyright>
+    <Product>Ticket Time Tracker</Product>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
+  </PropertyGroup>
+
+</Project>

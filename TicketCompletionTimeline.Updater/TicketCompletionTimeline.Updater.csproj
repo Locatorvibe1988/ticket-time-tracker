@@ -1,0 +1,13 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <AssemblyName>TicketCompletionTimeline.Updater</AssemblyName>
+    <Authors>Matthew Massena Jr.</Authors>
+    <Company>Matthew Massena Jr.</Company>
+    <Copyright>Copyright © 2026 Matthew Massena Jr.</Copyright>
+    <Product>Ticket Time Tracker Updater</Product>
+  </PropertyGroup>
+</Project>

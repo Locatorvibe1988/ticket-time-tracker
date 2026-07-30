@@ -1,0 +1,8 @@
+{"id":"T1","priority":"P1","component":"scaffold","title":"Create WPF solution, domain records, xUnit project, and win-x64 publish profile","effort_human":"3h","effort_cc":"20min"}
+{"id":"T2","priority":"P1","component":"import","title":"Implement multiline CSV parsing, validation, ID aliases, warnings, and source-column preservation","effort_human":"5h","effort_cc":"30min"}
+{"id":"T3","priority":"P1","component":"metrics","title":"Implement Eastern DateTimeOffset normalization, DST rules, date grouping, buckets, and summaries","effort_human":"4h","effort_cc":"25min"}
+{"id":"T4","priority":"P1","component":"session","title":"Implement staged additive merging, fingerprints, conflicts, cancel safety, and clear behavior","effort_human":"4h","effort_cc":"25min"}
+{"id":"T5","priority":"P1","component":"ui","title":"Implement empty state, date selector, summary table, virtualized timeline, markers, shading, and pinned aggregate","effort_human":"8h","effort_cc":"45min"}
+{"id":"T6","priority":"P2","component":"settings","title":"Implement local settings persistence, recovery, threshold validation, and gap colors","effort_human":"3h","effort_cc":"15min"}
+{"id":"T7","priority":"P1","component":"tests","title":"Add the 54-case unit, integration, UI smoke, publish, and privacy test inventory","effort_human":"6h","effort_cc":"30min"}
+{"id":"T8","priority":"P1","component":"distribution","title":"Add publish.ps1, README launch instructions, and Windows publish smoke test","effort_human":"2h","effort_cc":"10min"}

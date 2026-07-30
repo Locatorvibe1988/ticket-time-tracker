@@ -1,0 +1,6 @@
+<Solution>
+  <Project Path="TicketCompletionTimeline.App/TicketCompletionTimeline.App.csproj" />
+  <Project Path="TicketCompletionTimeline.Core/TicketCompletionTimeline.Core.csproj" />
+  <Project Path="TicketCompletionTimeline.Tests/TicketCompletionTimeline.Tests.csproj" />
+  <Project Path="TicketCompletionTimeline.Updater/TicketCompletionTimeline.Updater.csproj" />
+</Solution>

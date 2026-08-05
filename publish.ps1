@@ -38,4 +38,8 @@ if ($LASTEXITCODE -ne 0) {
 
 Copy-Item -LiteralPath (Join-Path $root "TicketCompletionTimeline.App\update-config.json") -Destination (Join-Path $output "update-config.json") -Force
 
+# Release packages must not ship debug symbols or source-adjacent build
+# artifacts. Keep the portable folder focused on the files needed to run.
+Get-ChildItem -LiteralPath $output -Filter "*.pdb" -File -Recurse | Remove-Item -Force
+
 Write-Host "Updater included in $output"

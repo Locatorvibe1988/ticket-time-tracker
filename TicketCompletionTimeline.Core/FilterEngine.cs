@@ -15,6 +15,7 @@ public static class FilterEngine
         var selected = filters.AssignedUsers;
         return records
             .Where(record => selected is not { Count: > 0 } || selected.Contains(record.AssignedUser, StringComparer.OrdinalIgnoreCase))
+            .Where(record => !filters.HasTeamFilter || string.Equals(TeamName(record), filters.AssignedTeamName!.Trim(), StringComparison.OrdinalIgnoreCase))
             .Where(record => filters.WorkHours switch
             {
                 WorkHourFilter.WorkHours => settings.IsWithinWorkHours(record.Completion),
@@ -22,6 +23,21 @@ public static class FilterEngine
                 _ => true
             })
             .ToList();
+    }
+
+    public static string TeamName(CompletionRecord record)
+    {
+        foreach (var pair in record.SourceValues)
+        {
+            if (string.Equals(pair.Key, "Assigned User's Team Name", StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(pair.Key, "Assigned User Team Name", StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(pair.Key, "Assigned User Team", StringComparison.OrdinalIgnoreCase))
+            {
+                return string.IsNullOrWhiteSpace(pair.Value) ? "No team" : pair.Value.Trim();
+            }
+        }
+
+        return "No team";
     }
 
     public static bool MatchesUser(

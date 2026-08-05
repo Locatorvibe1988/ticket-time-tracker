@@ -96,7 +96,6 @@ public sealed class TimelineControl : FrameworkElement
 {
     private static readonly Pen GridPen = CreatePen(Color.FromRgb(223, 233, 241));
     private static readonly SolidColorBrush ActiveBrush = CreateBrush(Color.FromRgb(237, 246, 252));
-    private static readonly SolidColorBrush BadgeBrush = CreateBrush(Color.FromRgb(19, 103, 177));
     private static readonly SolidColorBrush GreenGapBrush = CreateBrush(Color.FromArgb(165, 27, 135, 76));
     private static readonly SolidColorBrush AmberGapBrush = CreateBrush(Color.FromArgb(165, 180, 117, 15));
     private static readonly SolidColorBrush RedGapBrush = CreateBrush(Color.FromArgb(165, 196, 61, 75));
@@ -210,10 +209,46 @@ public sealed class TimelineControl : FrameworkElement
             var count = bucket.Count();
             var badgeWidth = Math.Min(Math.Max(20, cellWidth - 4), count > 99 ? 30 : 24);
             var badge = new Rect(bucket.Key * cellWidth + (cellWidth - badgeWidth) / 2, 8, badgeWidth, 22);
-            drawingContext.DrawRoundedRectangle(BadgeBrush, null, badge, 8, 8);
-            var text = new FormattedText(count.ToString(CultureInfo.InvariantCulture), CultureInfo.InvariantCulture, FlowDirection.LeftToRight, BadgeTypeface, 11, Brushes.White, pixelsPerDip);
+            var colors = bucket
+                .Select(record => CdcListClassifier.Classify(GetCdcList(record)).Color)
+                .Distinct()
+                .OrderBy(color => color)
+                .ToList();
+            if (colors.Count == 1)
+            {
+                drawingContext.DrawRoundedRectangle(CdcPalette.Brush(colors[0]), null, badge, 8, 8);
+            }
+            else
+            {
+                DrawDiagonalBadge(drawingContext, badge, colors[0], colors[1]);
+            }
+            var badgeTextBrush = colors.All(color => CdcPalette.TextBrush(color) == Brushes.Black) ? Brushes.Black : Brushes.White;
+            var text = new FormattedText(count.ToString(CultureInfo.InvariantCulture), CultureInfo.InvariantCulture, FlowDirection.LeftToRight, BadgeTypeface, 11, badgeTextBrush, pixelsPerDip);
             drawingContext.DrawText(text, new Point(badge.X + (badge.Width - text.Width) / 2, badge.Y + (badge.Height - text.Height) / 2));
         }
+    }
+
+    private static string GetCdcList(CompletionRecord record)
+    {
+        var match = record.SourceValues.FirstOrDefault(pair => string.Equals(pair.Key, "CDC List", StringComparison.OrdinalIgnoreCase));
+        return match.Value ?? string.Empty;
+    }
+
+    private static void DrawDiagonalBadge(DrawingContext drawingContext, Rect badge, CdcColor first, CdcColor second)
+    {
+        drawingContext.PushClip(new RectangleGeometry(badge, 8, 8));
+        drawingContext.DrawRectangle(CdcPalette.Brush(first), null, badge);
+        var diagonal = new StreamGeometry();
+        using (var context = diagonal.Open())
+        {
+            context.BeginFigure(new Point(badge.Left, badge.Bottom), true, true);
+            context.LineTo(new Point(badge.Left, badge.Top), true, false);
+            context.LineTo(new Point(badge.Right, badge.Top), true, false);
+        }
+        diagonal.Freeze();
+        drawingContext.DrawGeometry(CdcPalette.Brush(second), null, diagonal);
+        drawingContext.DrawLine(CreatePen(Color.FromArgb(180, 255, 255, 255)), new Point(badge.Left, badge.Bottom), new Point(badge.Right, badge.Top));
+        drawingContext.Pop();
     }
 
     private static SolidColorBrush GetGapBrush(GapBand band) => band switch

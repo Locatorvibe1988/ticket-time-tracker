@@ -6,6 +6,7 @@ using System.Reflection;
 using System.Runtime.CompilerServices;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Data;
 using System.Windows.Input;
 using Microsoft.Win32;
 using TicketCompletionTimeline.Core;
@@ -28,6 +29,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
     private GapThresholds _thresholds;
     private bool _fullDayTimeline;
     private bool _uiReady;
+    private string _selectedTeamName = "All teams";
     private CompletionFilters _filters = new();
     private UserRowView? _dailyAggregateRow;
     private PeriodRowView? _periodAggregateRow;
@@ -47,6 +49,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
     public ObservableCollection<TrendPointView> MonthlyTrendPoints { get; } = [];
     public ObservableCollection<ReviewSignalView> ReviewSignalRows { get; } = [];
     public ObservableCollection<FilterUserOption> FilterUsers { get; } = [];
+    public ObservableCollection<string> AvailableTeams { get; } = [];
     public UserRowView? DailyAggregateRow => _dailyAggregateRow;
     public PeriodRowView? PeriodAggregateRow => _periodAggregateRow;
     public DateChoice? SelectedDate { get => _state.SelectedDate; set { _state.SelectedDate = value; OnPropertyChanged(); RefreshSelectedDate(); } }
@@ -60,6 +63,18 @@ public partial class MainWindow : Window, INotifyPropertyChanged
     public double GreenGapThreshold => _thresholds.GreenBelowMinutes;
     public double RedGapThreshold => _thresholds.RedAboveMinutes;
     public bool HasActiveFilters => _filters.HasValue;
+    public string SelectedTeamName
+    {
+        get => _selectedTeamName;
+        set
+        {
+            var next = string.IsNullOrWhiteSpace(value) ? "All teams" : value;
+            if (string.Equals(_selectedTeamName, next, StringComparison.OrdinalIgnoreCase)) return;
+            _selectedTeamName = next;
+            OnPropertyChanged();
+            ApplyFilterChanges();
+        }
+    }
     public ReportViewKind ActiveView => _activeView;
     public Visibility DailyViewVisibility => _activeView == ReportViewKind.Daily ? Visibility.Visible : Visibility.Collapsed;
     public Visibility WeeklyViewVisibility => _activeView == ReportViewKind.Weekly ? Visibility.Visible : Visibility.Collapsed;
@@ -73,6 +88,11 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         InitializeComponent();
         DataContext = this;
         _thresholds = _settingsStore.Load();
+        CdcPalette.Configure(_thresholds.EffectiveCdcColors);
+        var preferences = _settingsStore.LoadPreferences();
+        _selectedTeamName = preferences.AssignedTeamName ?? "All teams";
+        _fullDayTimeline = preferences.FullDayTimeline;
+        CollectionViewSource.GetDefaultView(UserRows).GroupDescriptions.Add(new PropertyGroupDescription(nameof(UserRowView.AssignedTeamName)));
         var archive = _archiveStore.Load();
         _records = archive.Records.ToList();
         _archiveImports = archive.Imports.ToList();
@@ -80,6 +100,8 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         _rejectedRows = _archiveImports.Sum(batch => batch.RejectedRows);
         RefreshFilterUsers();
         _uiReady = true;
+        _filters = ReadFilters();
+        OnPropertyChanged(nameof(SelectedTeamName));
         UpdateActiveViewButton();
         if (_records.Count > 0)
         {
@@ -270,6 +292,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
     private void RefreshSelectedDate()
     {
         ClearDashboardCollections();
+        ActivityHeader.Visibility = Visibility.Visible;
         DailyTimelinePanel.Visibility = Visibility.Visible;
         DailySummaryGrid.Visibility = Visibility.Visible;
         PeriodSummaryGrid.Visibility = Visibility.Collapsed;
@@ -319,10 +342,20 @@ public partial class MainWindow : Window, INotifyPropertyChanged
                 ? _metrics.CalculateReviewPriorities(filteredRecords, date.AddDays(-29), date, _thresholds)
                 : new Dictionary<string, UserReviewPriority>(StringComparer.OrdinalIgnoreCase);
         }
-        foreach (var user in day.Users)
+        var dailyViews = day.Users
+            .Select(user => new UserRowView(user, reviewPriority: priorities.GetValueOrDefault(user.AssignedUser)))
+            .OrderBy(view => view.AssignedTeamName, StringComparer.OrdinalIgnoreCase)
+            .ThenBy(view => view.AssignedUser, StringComparer.OrdinalIgnoreCase)
+            .ToList();
+        foreach (var view in dailyViews) UserRows.Add(view);
+        string? currentTeam = null;
+        foreach (var view in dailyViews)
         {
-            var view = new UserRowView(user, reviewPriority: priorities.GetValueOrDefault(user.AssignedUser));
-            UserRows.Add(view);
+            if (!string.Equals(currentTeam, view.AssignedTeamName, StringComparison.OrdinalIgnoreCase))
+            {
+                currentTeam = view.AssignedTeamName;
+                TimelineRows.Add(UserRowView.TeamHeader(currentTeam));
+            }
             TimelineRows.Add(view);
         }
         var average = MetricsCalculator.AverageLongestGap(day.Users);
@@ -352,6 +385,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
     private void RefreshPeriod(PeriodChoice choice)
     {
         ClearDashboardCollections();
+        ActivityHeader.Visibility = Visibility.Visible;
         var baseRecords = FilterEngine.FilterRecords(_records, _filters with { ReviewPriority = ReviewPriorityBand.Any }, _thresholds);
         var baseMetrics = _metrics.CalculatePeriod(baseRecords, choice.Kind, choice.StartDate, _thresholds);
         var basePriorities = ShouldCalculatePriorities()
@@ -411,7 +445,23 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         FilterUsers.Clear();
         foreach (var user in _records.Select(record => record.AssignedUser).Distinct(StringComparer.OrdinalIgnoreCase).OrderBy(user => user, StringComparer.OrdinalIgnoreCase))
             FilterUsers.Add(new FilterUserOption(user, selected.Contains(user)));
+        RefreshFilterTeams();
         if (_uiReady) { _filters = ReadFilters(); UpdateFilterSummary(); }
+    }
+
+    private void RefreshFilterTeams()
+    {
+        var teams = _records
+            .Select(FilterEngine.TeamName)
+            .Where(team => !string.Equals(team, "No team", StringComparison.OrdinalIgnoreCase))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .OrderBy(team => team, StringComparer.OrdinalIgnoreCase)
+            .ToList();
+        AvailableTeams.Clear();
+        AvailableTeams.Add("All teams");
+        foreach (var team in teams) AvailableTeams.Add(team);
+        if (!AvailableTeams.Contains(_selectedTeamName, StringComparer.OrdinalIgnoreCase)) _selectedTeamName = "All teams";
+        OnPropertyChanged(nameof(SelectedTeamName));
     }
 
     private void ClearDashboardCollections()
@@ -453,6 +503,8 @@ public partial class MainWindow : Window, INotifyPropertyChanged
     {
         _uiReady = false;
         foreach (var option in FilterUsers) option.IsSelected = false;
+        _selectedTeamName = "All teams";
+        OnPropertyChanged(nameof(SelectedTeamName));
         MinimumCompletionsBox.Text = string.Empty;
         MaximumCompletionsBox.Text = string.Empty;
         MinimumActiveDaysBox.Text = string.Empty;
@@ -477,7 +529,8 @@ public partial class MainWindow : Window, INotifyPropertyChanged
             ParseWorkHourFilter(WorkHoursFilterBox.SelectedValue as string),
             ParsePriorityBand(ReviewPriorityFilterBox.SelectedValue as string),
             ParseNullableInt(MinimumActiveDaysBox.Text),
-            ParseNullableInt(MaximumActiveDaysBox.Text));
+            ParseNullableInt(MaximumActiveDaysBox.Text),
+            SelectedTeamName.Equals("All teams", StringComparison.OrdinalIgnoreCase) ? null : SelectedTeamName);
     }
 
     private static int? ParseNullableInt(string text) => int.TryParse(text, out var value) && value >= 0 ? value : null;
@@ -496,6 +549,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
             return;
         }
         var parts = new List<string>();
+        if (_filters.HasTeamFilter) parts.Add($"team: {_filters.AssignedTeamName}");
         if (_filters.HasUserFilter) parts.Add($"{_filters.AssignedUsers!.Count} user(s)");
         if (_filters.WorkHours == WorkHourFilter.WorkHours) parts.Add("work hours");
         if (_filters.WorkHours == WorkHourFilter.OnCall) parts.Add("on-call");
@@ -592,6 +646,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         _archiveImports.Clear();
         _rejectedRows = 0;
         _filters = new();
+        AssignedTeamNameBox.Text = string.Empty;
         _dailyAggregateRow = null;
         _periodAggregateRow = null;
         OnPropertyChanged(nameof(DailyAggregateRow));
@@ -623,6 +678,16 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         {
             var choice = MessageBox.Show(this, $"The local archive could not be saved while closing. Close anyway?\n\n{error.Message}", "Archive save failed", MessageBoxButton.YesNo, MessageBoxImage.Error);
             e.Cancel = choice != MessageBoxResult.Yes;
+        }
+        if (!e.Cancel)
+        {
+            try
+            {
+                _settingsStore.SavePreferences(new AppPreferences(
+                    SelectedTeamName.Equals("All teams", StringComparison.OrdinalIgnoreCase) ? null : SelectedTeamName,
+                    _fullDayTimeline));
+            }
+            catch { }
         }
     }
 
@@ -758,6 +823,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         if (dialog.ShowDialog() == true)
         {
             _thresholds = dialog.Settings;
+            CdcPalette.Configure(_thresholds.EffectiveCdcColors);
             OnPropertyChanged(nameof(GreenGapThreshold));
             OnPropertyChanged(nameof(RedGapThreshold));
             RefreshActiveView();

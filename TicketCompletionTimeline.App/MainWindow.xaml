@@ -154,10 +154,14 @@
 
         <Border Grid.Row="2" Background="#F7FAFD" BorderBrush="#DCE8F2" BorderThickness="0,0,0,1" Padding="20,8">
             <Grid>
-                <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
                 <Button x:Name="FilterButton" Content="Filters" Style="{StaticResource QuietButton}" Click="FilterButton_Click" />
-                <TextBlock x:Name="FilterSummaryText" Grid.Column="1" Text="All users and all activity" Foreground="#637A90" VerticalAlignment="Center" Margin="10,0,0,0" TextTrimming="CharacterEllipsis" />
-                <Button Grid.Column="2" Content="Clear filters" Style="{StaticResource QuietButton}" Click="ClearFilters_Click" IsEnabled="{Binding HasActiveFilters}" />
+                <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center" Margin="20,0,0,0">
+                    <TextBlock Text="Assigned Team Name" FontWeight="SemiBold" Foreground="#31516D" VerticalAlignment="Center" Margin="0,0,8,0" />
+                    <ComboBox x:Name="AssignedTeamNameBox" Width="220" Height="30" Padding="7,3" ItemsSource="{Binding AvailableTeams}" SelectedItem="{Binding SelectedTeamName, Mode=TwoWay}" ToolTip="Filter the selected view by assigned team name." />
+                </StackPanel>
+                <TextBlock x:Name="FilterSummaryText" Grid.Column="2" Text="All users and all activity" Foreground="#637A90" VerticalAlignment="Center" Margin="18,0,0,0" TextTrimming="CharacterEllipsis" />
+                <Button Grid.Column="3" Content="Clear filters" Style="{StaticResource QuietButton}" Click="ClearFilters_Click" IsEnabled="{Binding HasActiveFilters}" />
             </Grid>
         </Border>
 
@@ -228,7 +232,7 @@
                         <RowDefinition Height="Auto" />
                     </Grid.RowDefinitions>
 
-                    <Border Grid.Row="0" Background="#F7FAFD" BorderBrush="#E1EBF3" BorderThickness="0,0,0,1" Padding="16,11">
+                    <Border x:Name="ActivityHeader" Grid.Row="0" Background="#F7FAFD" BorderBrush="#E1EBF3" BorderThickness="0,0,0,1" Padding="16,11">
                         <Grid>
                             <!--
                                 Keep the title/actions row separate from the legend row.
@@ -268,14 +272,32 @@
                             <ListBox ItemsSource="{Binding TimelineRows}" ItemContainerStyle="{StaticResource ListItemStyle}" BorderThickness="0" Background="White" ScrollViewer.HorizontalScrollBarVisibility="Disabled" ScrollViewer.VerticalScrollBarVisibility="Disabled" VirtualizingPanel.IsVirtualizing="True" VirtualizingPanel.VirtualizationMode="Recycling">
                                 <ListBox.ItemTemplate>
                                     <DataTemplate>
-                                        <Grid Height="48" Background="White">
-                                            <Grid.ColumnDefinitions><ColumnDefinition Width="220" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions>
-                                            <Border Grid.Column="0" BorderBrush="#E4ECF3" BorderThickness="0,0,1,1" Padding="14,0">
-                                                <TextBlock Text="{Binding AssignedUser}" FontWeight="SemiBold" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
+                                        <Grid Background="White">
+                                            <Border Visibility="{Binding TeamHeaderVisibility}" Background="#EAF3FB" BorderBrush="#B9D4EC" BorderThickness="0,1,0,1" Padding="14,6">
+                                                <TextBlock Text="{Binding AssignedTeamName}" FontWeight="SemiBold" Foreground="#0B4F88" />
+                                            </Border>
+                                            <Grid Visibility="{Binding UserRowVisibility}" Height="48">
+                                                <Grid.ColumnDefinitions><ColumnDefinition Width="220" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions>
+                                                <Border Grid.Column="0" BorderBrush="#E4ECF3" BorderThickness="0,0,1,1" Padding="14,0">
+                                                <Grid>
+                                                    <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
+                                                    <TextBlock Text="{Binding AssignedUser}" FontWeight="SemiBold" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" ToolTip="{Binding AssignedTeamName}" />
+                                                    <ItemsControl Grid.Column="1" ItemsSource="{Binding CdcCounts}" Margin="6,2,0,2">
+                                                        <ItemsControl.ItemsPanel><ItemsPanelTemplate><StackPanel /></ItemsPanelTemplate></ItemsControl.ItemsPanel>
+                                                        <ItemsControl.ItemTemplate>
+                                                            <DataTemplate>
+                                                                <Border Background="{Binding Brush}" BorderBrush="{Binding BorderBrush}" BorderThickness="1" CornerRadius="2" Padding="3,0" Margin="0,0,0,1" ToolTip="{Binding Tooltip}">
+                                                                    <TextBlock Text="{Binding Display}" Foreground="{Binding TextBrush}" FontSize="9" FontWeight="SemiBold" />
+                                                                </Border>
+                                                            </DataTemplate>
+                                                        </ItemsControl.ItemTemplate>
+                                                    </ItemsControl>
+                                                </Grid>
                                             </Border>
                                             <Border Grid.Column="1" BorderBrush="#E4ECF3" BorderThickness="0,0,0,1" ClipToBounds="True">
                                                 <local:TimelineControl Events="{Binding Events}" GreenBelowMinutes="{Binding DataContext.GreenGapThreshold, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" RedAboveMinutes="{Binding DataContext.RedGapThreshold, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" StartHour="{Binding DataContext.TimelineStartHour, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" EndHour="{Binding DataContext.TimelineEndHour, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" BucketClicked="TimelineControl_BucketClicked" x:Name="UserTimeline" />
-                                            </Border>
+                                                </Border>
+                                            </Grid>
                                         </Grid>
                                     </DataTemplate>
                                 </ListBox.ItemTemplate>
@@ -399,8 +421,18 @@
                         </Grid>
                     </Border>
                     <DataGrid x:Name="DailySummaryGrid" Grid.Row="4" ItemsSource="{Binding UserRows}" MaxHeight="480" MinHeight="110" AutoGenerateColumns="False" HeadersVisibility="Column" CanUserAddRows="False" CanUserResizeRows="False" IsReadOnly="True" GridLinesVisibility="None" RowHeaderWidth="0" EnableRowVirtualization="True" ScrollViewer.VerticalScrollBarVisibility="Auto" Background="White" BorderThickness="0" MouseDoubleClick="SummaryGrid_MouseDoubleClick">
+                        <DataGrid.GroupStyle>
+                            <GroupStyle>
+                                <GroupStyle.HeaderTemplate>
+                                    <DataTemplate>
+                                        <Border Background="#EAF3FB" BorderBrush="#B9D4EC" BorderThickness="0,1,0,1" Padding="12,6"><TextBlock Text="{Binding Name}" FontWeight="SemiBold" Foreground="#0B4F88" /></Border>
+                                    </DataTemplate>
+                                </GroupStyle.HeaderTemplate>
+                            </GroupStyle>
+                        </DataGrid.GroupStyle>
                         <DataGrid.Columns>
                             <DataGridTextColumn Header="Assigned User" Binding="{Binding AssignedUser}" Width="2*" MinWidth="220" />
+                            <DataGridTextColumn Header="Team" Binding="{Binding AssignedTeamName}" Width="1.3*" MinWidth="150" />
                             <DataGridTextColumn Header="Total" Binding="{Binding Total}" Width="0.8*" MinWidth="90" />
                             <DataGridTextColumn Header="First" Binding="{Binding FirstText}" Width="1.1*" MinWidth="130" />
                             <DataGridTextColumn Header="Last" Binding="{Binding LastText}" Width="1.1*" MinWidth="130" />

@@ -97,6 +97,8 @@ Settings are stored locally and include:
 - Optional weekly/monthly operational review signals.
 - Optional user-level Operational Review Priority.
 - Evidence weights and minimum-history thresholds for review priority.
+- CDC List colors for 001, 002, 004, 005/006, 009, and other codes.
+- Assigned-team selection with team-first grouping in the Daily view and summary.
 
 On-call activity is not treated as a risk signal. Review Priority is an evidence summary for supervisor review, not a misconduct conclusion. It uses observable patterns such as long work-hour gaps, dense bursts, end-of-shift batching, changes from a user's prior baseline, low active-day consistency, and volume outliers against the filtered global average.
 

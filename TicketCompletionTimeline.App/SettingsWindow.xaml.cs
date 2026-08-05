@@ -37,6 +37,13 @@ public partial class SettingsWindow : Window
         HighThresholdBox.Text = settings.HighPriorityThreshold.ToString(CultureInfo.InvariantCulture);
         VolumeRatioBox.Text = settings.VolumeOutlierRatio.ToString(CultureInfo.InvariantCulture);
         ConsistencyRatioBox.Text = settings.LowConsistencyRatio.ToString(CultureInfo.InvariantCulture);
+        var cdcColors = settings.EffectiveCdcColors;
+        CdcBlueBox.Text = cdcColors.Blue;
+        CdcGreenBox.Text = cdcColors.Green;
+        CdcWhiteBox.Text = cdcColors.White;
+        CdcRedBox.Text = cdcColors.Red;
+        CdcPurpleBox.Text = cdcColors.Purple;
+        CdcBlackBox.Text = cdcColors.Black;
     }
 
     private void Cancel_Click(object sender, RoutedEventArgs e) => DialogResult = false;
@@ -77,9 +84,17 @@ public partial class SettingsWindow : Window
             highThreshold,
             volumeRatio,
             consistencyRatio);
+        var cdcColors = new CdcColorSettings(
+            CdcBlueBox.Text.Trim(),
+            CdcGreenBox.Text.Trim(),
+            CdcWhiteBox.Text.Trim(),
+            CdcRedBox.Text.Trim(),
+            CdcPurpleBox.Text.Trim(),
+            CdcBlackBox.Text.Trim());
+        settings = settings with { CdcColors = cdcColors };
         if (!settings.IsValid)
         {
-            ErrorText.Text = "Check thresholds, work hours, weights, and scoring ratios. High must be greater than Moderate; work start and end cannot match.";
+            ErrorText.Text = "Check thresholds, work hours, weights, scoring ratios, and CDC colors. Colors must be 6- or 8-digit hex values.";
             return;
         }
         try { _store.Save(settings); }

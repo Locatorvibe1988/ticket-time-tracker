@@ -2,6 +2,7 @@ using System.Collections.ObjectModel;
 using System.ComponentModel;
 using System.IO;
 using System.Runtime.CompilerServices;
+using System.Windows;
 using System.Windows.Media;
 using TicketCompletionTimeline.Core;
 
@@ -43,7 +44,11 @@ public enum ReportViewKind
 
 public sealed class UserRowView
 {
+    public bool IsTeamHeader { get; }
+    public Visibility TeamHeaderVisibility => IsTeamHeader ? Visibility.Visible : Visibility.Collapsed;
+    public Visibility UserRowVisibility => IsTeamHeader ? Visibility.Collapsed : Visibility.Visible;
     public string AssignedUser { get; }
+    public string AssignedTeamName { get; }
     public int Total { get; }
     public string FirstText { get; }
     public string LastText { get; }
@@ -52,6 +57,7 @@ public sealed class UserRowView
     public Brush LongestGapTextBrush { get; }
     public GapBand LongestGapBand { get; }
     public IReadOnlyList<CompletionRecord> Events { get; }
+    public IReadOnlyList<CdcCountView> CdcCounts { get; }
     public UserReviewPriority? ReviewPriority { get; }
     public string ReviewPriorityText => ReviewPriority?.Band switch
     {
@@ -64,9 +70,34 @@ public sealed class UserRowView
     public Brush ReviewPriorityBrush => PriorityPalette.ToBrush(ReviewPriority?.Band ?? ReviewPriorityBand.Any);
     public Brush ReviewPriorityTextBrush => ReviewPriority is null || ReviewPriority.Band == ReviewPriorityBand.InsufficientData ? GapPalette.NeutralText : Brushes.White;
 
+    private UserRowView(string teamName)
+    {
+        IsTeamHeader = true;
+        AssignedUser = teamName;
+        AssignedTeamName = teamName;
+        Total = 0;
+        FirstText = string.Empty;
+        LastText = string.Empty;
+        LongestGapText = string.Empty;
+        LongestGapBand = GapBand.None;
+        LongestGapBrush = Brushes.Transparent;
+        LongestGapTextBrush = Brushes.Transparent;
+        Events = Array.Empty<CompletionRecord>();
+        CdcCounts = Array.Empty<CdcCountView>();
+    }
+
+    public static UserRowView TeamHeader(string teamName) => new(teamName);
+
     public UserRowView(UserDayMetrics metrics, double? displayedGap = null, bool aggregate = false, UserReviewPriority? reviewPriority = null)
     {
+        IsTeamHeader = false;
         AssignedUser = metrics.AssignedUser;
+        var teams = metrics.Events
+            .Select(FilterEngine.TeamName)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .OrderBy(team => team, StringComparer.OrdinalIgnoreCase)
+            .ToList();
+        AssignedTeamName = aggregate ? "All teams" : string.Join(", ", teams.DefaultIfEmpty("No team"));
         Total = metrics.Total;
         FirstText = metrics.First?.ToString("h:mm:ss tt") ?? "—";
         LastText = metrics.Last?.ToString("h:mm:ss tt") ?? "—";
@@ -75,10 +106,101 @@ public sealed class UserRowView
         LongestGapBrush = GapPalette.ToBrush(LongestGapBand);
         LongestGapTextBrush = LongestGapBand == GapBand.None ? GapPalette.NeutralText : Brushes.White;
         Events = metrics.Events;
+        CdcCounts = CdcCountView.Build(metrics.Events);
         ReviewPriority = aggregate ? null : reviewPriority;
     }
 
     private static string FormatGap(double? minutes) => minutes is null ? "—" : $"{minutes:0.0} min";
+}
+
+public sealed class CdcCountView
+{
+    public string Code { get; }
+    public int Count { get; }
+    public string Display => $"{Code}  {Count:N0}";
+    public string Tooltip => Code == "Other" ? "Other CDC codes" : $"CDC {Code}";
+    public Brush Brush { get; }
+    public Brush TextBrush { get; }
+    public Brush BorderBrush { get; }
+
+    private CdcCountView(string code, int count, CdcColor color)
+    {
+        Code = code;
+        Count = count;
+        Brush = CdcPalette.Brush(color);
+        TextBrush = CdcPalette.TextBrush(color);
+        BorderBrush = CdcPalette.BorderBrush(color);
+    }
+
+    public static IReadOnlyList<CdcCountView> Build(IEnumerable<CompletionRecord> events)
+    {
+        return events
+            .Select(record => CdcListClassifier.Classify(GetCdcList(record)))
+            .GroupBy(status => status.Code, StringComparer.OrdinalIgnoreCase)
+            .Select(group => new CdcCountView(group.Key, group.Count(), group.First().Color))
+            .OrderBy(view => view.Code == "Other" ? "999" : view.Code, StringComparer.OrdinalIgnoreCase)
+            .ToList();
+    }
+
+    private static string GetCdcList(CompletionRecord record)
+    {
+        var match = record.SourceValues.FirstOrDefault(pair => string.Equals(pair.Key, "CDC List", StringComparison.OrdinalIgnoreCase));
+        return match.Value ?? string.Empty;
+    }
+}
+
+public static class CdcPalette
+{
+    public static SolidColorBrush WhiteBorder { get; } = Create(Color.FromRgb(180, 190, 200));
+
+    private static readonly object Sync = new();
+    private static Dictionary<CdcColor, Color> _colors = ToColors(CdcColorSettings.Default);
+
+    public static void Configure(CdcColorSettings settings)
+    {
+        if (!settings.IsValid) settings = CdcColorSettings.Default;
+        lock (Sync) _colors = ToColors(settings);
+    }
+
+    public static Brush Brush(CdcColor color)
+    {
+        Color value;
+        lock (Sync) value = _colors[color];
+        return Create(value);
+    }
+
+    public static Brush TextBrush(CdcColor color)
+    {
+        Color value;
+        lock (Sync) value = _colors[color];
+        var luminance = (0.299 * value.R + 0.587 * value.G + 0.114 * value.B) / 255;
+        return luminance > 0.68 ? Brushes.Black : Brushes.White;
+    }
+
+    public static Brush BorderBrush(CdcColor color) => TextBrush(color) == Brushes.Black ? WhiteBorder : Brush(color);
+
+    private static Dictionary<CdcColor, Color> ToColors(CdcColorSettings settings) => new()
+    {
+        [CdcColor.Blue] = Parse(settings.Blue, Colors.RoyalBlue),
+        [CdcColor.Green] = Parse(settings.Green, Colors.LimeGreen),
+        [CdcColor.White] = Parse(settings.White, Colors.White),
+        [CdcColor.Red] = Parse(settings.Red, Colors.Red),
+        [CdcColor.Purple] = Parse(settings.Purple, Colors.MediumPurple),
+        [CdcColor.Black] = Parse(settings.Black, Colors.Black)
+    };
+
+    private static Color Parse(string value, Color fallback)
+    {
+        try { return (Color)ColorConverter.ConvertFromString(value.Trim())!; }
+        catch { return fallback; }
+    }
+
+    private static SolidColorBrush Create(Color color)
+    {
+        var brush = new SolidColorBrush(color);
+        brush.Freeze();
+        return brush;
+    }
 }
 
 public sealed class PeriodRowView

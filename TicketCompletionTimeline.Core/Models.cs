@@ -43,6 +43,29 @@ public enum GapBand
     Red
 }
 
+public sealed record CdcColorSettings(
+    string Blue = "#3B82F6",
+    string Green = "#22C55E",
+    string White = "#FFFFFF",
+    string Red = "#EF4444",
+    string Purple = "#8B5CF6",
+    string Black = "#111827")
+{
+    public static CdcColorSettings Default { get; } = new();
+
+    public bool IsValid =>
+        IsHexColor(Blue) && IsHexColor(Green) && IsHexColor(White) &&
+        IsHexColor(Red) && IsHexColor(Purple) && IsHexColor(Black);
+
+    private static bool IsHexColor(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value)) return false;
+        var text = value.Trim();
+        if (text.StartsWith('#')) text = text[1..];
+        return (text.Length == 6 || text.Length == 8) && text.All(Uri.IsHexDigit);
+    }
+}
+
 public sealed record GapThresholds(
     double GreenBelowMinutes = 60,
     double RedAboveMinutes = 120,
@@ -61,9 +84,13 @@ public sealed record GapThresholds(
     int ModeratePriorityThreshold = 2,
     int HighPriorityThreshold = 5,
     double VolumeOutlierRatio = 0.5,
-    double LowConsistencyRatio = 0.5)
+    double LowConsistencyRatio = 0.5,
+    CdcColorSettings? CdcColors = null)
 {
     public static GapThresholds Default { get; } = new();
+
+    [System.Text.Json.Serialization.JsonIgnore]
+    public CdcColorSettings EffectiveCdcColors => CdcColors is { IsValid: true } ? CdcColors : CdcColorSettings.Default;
 
     public bool IsValid =>
         GreenBelowMinutes >= 0 &&
@@ -78,7 +105,8 @@ public sealed record GapThresholds(
         ModeratePriorityThreshold >= 1 &&
         HighPriorityThreshold > ModeratePriorityThreshold &&
         VolumeOutlierRatio > 0 && VolumeOutlierRatio < 1 &&
-        LowConsistencyRatio > 0 && LowConsistencyRatio <= 1;
+        LowConsistencyRatio > 0 && LowConsistencyRatio <= 1 &&
+        EffectiveCdcColors.IsValid;
 
     public TimeSpan WorkdayStart => TimeSpan.FromMinutes(WorkdayStartMinutes);
     public TimeSpan WorkdayEnd => TimeSpan.FromMinutes(WorkdayEndMinutes);
@@ -191,12 +219,14 @@ public sealed record CompletionFilters(
     WorkHourFilter WorkHours = WorkHourFilter.Any,
     ReviewPriorityBand ReviewPriority = ReviewPriorityBand.Any,
     int? MinimumActiveDays = null,
-    int? MaximumActiveDays = null)
+    int? MaximumActiveDays = null,
+    string? AssignedTeamName = null)
 {
     public bool HasUserFilter => AssignedUsers is { Count: > 0 };
+    public bool HasTeamFilter => !string.IsNullOrWhiteSpace(AssignedTeamName);
     public bool HasValue => HasUserFilter || MinimumCompletions.HasValue || MaximumCompletions.HasValue ||
         LongestGapBand != GapBand.None || WorkHours != WorkHourFilter.Any ||
-        ReviewPriority != ReviewPriorityBand.Any || MinimumActiveDays.HasValue || MaximumActiveDays.HasValue;
+        ReviewPriority != ReviewPriorityBand.Any || MinimumActiveDays.HasValue || MaximumActiveDays.HasValue || HasTeamFilter;
 }
 
 public sealed record ReviewPriorityEvidence(
@@ -216,9 +246,12 @@ public sealed record UserReviewPriority(
     public bool HasEnoughData => Band != ReviewPriorityBand.InsufficientData;
 }
 
+public sealed record AppPreferences(string? AssignedTeamName = null, bool FullDayTimeline = false);
+
 public sealed class SettingsStore
 {
     private readonly string _path;
+    private readonly string _preferencesPath;
 
     public SettingsStore(string? path = null)
     {
@@ -226,6 +259,7 @@ public sealed class SettingsStore
             Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
             "TicketCompletionTimeline",
             "settings.json");
+        _preferencesPath = _path + ".preferences";
     }
 
     public GapThresholds Load()
@@ -248,5 +282,25 @@ public sealed class SettingsStore
         var directory = Path.GetDirectoryName(_path)!;
         Directory.CreateDirectory(directory);
         File.WriteAllText(_path, System.Text.Json.JsonSerializer.Serialize(settings, new System.Text.Json.JsonSerializerOptions { WriteIndented = true }));
+    }
+
+    public AppPreferences LoadPreferences()
+    {
+        try
+        {
+            if (!File.Exists(_preferencesPath)) return new AppPreferences();
+            return System.Text.Json.JsonSerializer.Deserialize<AppPreferences>(File.ReadAllText(_preferencesPath)) ?? new AppPreferences();
+        }
+        catch
+        {
+            return new AppPreferences();
+        }
+    }
+
+    public void SavePreferences(AppPreferences preferences)
+    {
+        var directory = Path.GetDirectoryName(_preferencesPath)!;
+        Directory.CreateDirectory(directory);
+        File.WriteAllText(_preferencesPath, System.Text.Json.JsonSerializer.Serialize(preferences, new System.Text.Json.JsonSerializerOptions { WriteIndented = true }));
     }
 }

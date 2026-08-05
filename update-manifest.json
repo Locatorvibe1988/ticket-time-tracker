@@ -1,7 +1,7 @@
 {
-  "version": "1.0.0",
-  "downloadUrl": "https://github.com/Locatorvibe1988/ticket-time-tracker/releases/latest/download/Ticket-Time-Tracker.zip",
-  "sha256": "ED2BA3148EA3D8B8BF75F8007072D76ED98D646705D0CE18F077B46BE2145234",
-  "releaseNotes": "Initial Ticket Time Tracker release with daily, weekly, and monthly completion views, drill-down details, filters, local archive persistence, and a verified update path.",
+  "version": "1.1.0",
+  "downloadUrl": "https://github.com/Locatorvibe1988/ticket-time-tracker/releases/download/v1.1.0/Ticket-Time-Tracker-1.1.0.zip",
+  "sha256": "F9AE367DE53893BFEBC4926BCC54B88E53B776AE30BE99FCE80AC28ED74EC53C",
+  "releaseNotes": "Adds selectable team filtering, team-first grouping, configurable CDC List colors, persistent view settings, and diagonal split markers for mixed CDC colors in one 15-minute bucket.",
   "minimumSupportedVersion": "1.0.0"
 }

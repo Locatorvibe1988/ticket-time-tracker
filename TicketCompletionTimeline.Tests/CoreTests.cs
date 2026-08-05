@@ -8,6 +8,35 @@ namespace TicketCompletionTimeline.Tests;
 
 public sealed class CoreTests
 {
+    [Theory]
+    [InlineData("EGO (001- No Conflict)", "001", CdcColor.Blue)]
+    [InlineData("EGO (002- Marked)", "002", CdcColor.Green)]
+    [InlineData("EGO (004- White)", "004", CdcColor.White)]
+    [InlineData("EGO (005- Coordination)", "005", CdcColor.Red)]
+    [InlineData("EGO (006- Critical)", "006", CdcColor.Red)]
+    [InlineData("EGO (009- Work Complete)", "009", CdcColor.Purple)]
+    [InlineData("EGO (003- Other)", "Other", CdcColor.Black)]
+    public void ClassifiesCdcListCodes(string value, string expectedCode, CdcColor expectedColor)
+    {
+        var result = CdcListClassifier.Classify(value);
+        Assert.Equal(expectedCode, result.Code);
+        Assert.Equal(expectedColor, result.Color);
+    }
+
+    [Fact]
+    public void FiltersRecordsByAssignedTeamName()
+    {
+        const string csv = "ID,Assigned User,Assigned User's Team Name,Last Completion\n" +
+                           "1,Alice,North,2026-07-29 08:00:00\n" +
+                           "2,Bob,South,2026-07-29 09:00:00\n" +
+                           "3,Carol,North Central,2026-07-29 10:00:00\n";
+
+        var rows = new CsvImportService().Parse(new StringReader(csv)).ValidRows;
+        var result = FilterEngine.FilterRecords(rows, new CompletionFilters(AssignedTeamName: "north"), GapThresholds.Default);
+
+        Assert.Equal(new[] { "Alice" }, result.Select(row => row.AssignedUser));
+    }
+
     [Fact]
     public void ParsesQuotedMultilineFieldsAndRequiredColumns()
     {
@@ -189,6 +218,27 @@ public sealed class CoreTests
         finally
         {
             if (File.Exists(path)) File.Delete(path);
+        }
+    }
+
+    [Fact]
+    public void PersistsCdcColorsAndViewPreferences()
+    {
+        var path = Path.Combine(Path.GetTempPath(), $"ticket-timeline-settings-{Guid.NewGuid():N}.json");
+        try
+        {
+            var store = new SettingsStore(path);
+            var colors = new CdcColorSettings("#123456", "#234567", "#345678", "#456789", "#56789A", "#6789AB");
+            store.Save(GapThresholds.Default with { CdcColors = colors });
+            store.SavePreferences(new AppPreferences("North", true));
+
+            Assert.Equal(colors, store.Load().EffectiveCdcColors);
+            Assert.Equal(new AppPreferences("North", true), store.LoadPreferences());
+        }
+        finally
+        {
+            foreach (var file in new[] { path, path + ".preferences" })
+                if (File.Exists(file)) File.Delete(file);
         }
     }
 
